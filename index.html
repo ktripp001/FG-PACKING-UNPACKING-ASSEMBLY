@@ -35,7 +35,10 @@
     .footer{max-width:1000px;margin:16px auto;padding:8px 16px;color:#6b7280;font-size:.92rem;text-align:center}
     .tagline{font-size:.95rem;color:#4b5563}
     .note{font-size:.9rem;color:#374151;background:#fff7ed;border:1px dashed #fdba74;padding:.6rem .75rem;border-radius:10px}
+    .note.small{font-size:.85rem;margin-top:6px}
     .hidden{display:none}
+    .ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;padding:.8rem 1rem;border-radius:10px;margin-bottom:12px;display:none}
+    .err{background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d;padding:.8rem 1rem;border-radius:10px;margin-bottom:12px;display:none}
     .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:.25rem 0 1rem}
     .tab{padding:.5rem .8rem;border-radius:999px;border:1px solid #e5e7eb;background:#fff;color:#374151;font-weight:700;cursor:pointer}
     .tab.active{background:#922121;border-color:#922121;color:#fff}
@@ -57,16 +60,19 @@
 
   <div class="wrap">
     <div class="card">
+      <div id="ok" class="ok">Thanks! Your request was sent. We’ll reach out shortly.</div>
+      <div id="err" class="err">We couldn’t send via FormSubmit (privacy extension or network blocked). We opened your email app instead—just press Send.</div>
+
       <h1 id="title">Instant Quote</h1>
       <div class="tabs">
         <a class="tab" data-svc="labor" href="?svc=labor">Load/Unload (Labor Only)</a>
         <a class="tab" data-svc="packing" href="?svc=packing">Packing / Unpacking</a>
         <a class="tab" data-svc="assembly" href="?svc=assembly">Furniture Assembly</a>
       </div>
-      <div class="tagline">No truck provided. Choose a service for a quick estimate; click “Request Exact Quote” to email us the details.</div>
+      <div class="tagline">No truck provided. Pick a service tab above for a fast estimate; submit for a written quote.</div>
       <div class="divider"></div>
 
-      <form id="quoteForm" action="#" method="GET" onsubmit="return false;">
+      <form id="quoteForm" onsubmit="return false;">
         <h2>Contact &amp; Location</h2>
         <div class="row">
           <div>
@@ -193,6 +199,10 @@
         <div class="note" style="margin-top:12px;">
           Rates are typical for Pasadena/LA. Final pricing may vary based on access, parking, and timing.
         </div>
+        <div class="note small">
+          <strong>Heads up:</strong> The first form you send via FormSubmit will trigger a one-time verification email to
+          <strong>kelly@fertigandgordon.com</strong> — click <em>Confirm</em> once. After that, requests go straight to your inbox.
+        </div>
 
         <div class="divider"></div>
         <div id="estimate" class="est">
@@ -203,7 +213,7 @@
         <div class="divider"></div>
         <div class="actions">
           <button class="btn" type="button" onclick="calculate()">Calculate Estimate</button>
-          <button class="btn secondary" type="button" onclick="sendEmail()">Request Exact Quote</button>
+          <button class="btn secondary" type="button" onclick="requestQuote()">Request Exact Quote</button>
         </div>
       </form>
     </div>
@@ -212,7 +222,7 @@
   <div class="footer">
     © <span id="year"></span> Fertig &amp; Gordon Property Services • 7 North Fifth Avenue, Arcadia, CA • 
     <a href="tel:+16264615283">626.461.5283</a> • 
-    <a href="https://www.fertigandgordon.com" target="_blank" rel="noopener">www.fertigandgordon.com</a> • <span style="color:#9ca3af">v1757451037</span>
+    <a href="https://www.fertigandgordon.com" target="_blank" rel="noopener">www.fertigandgordon.com</a> • <span style="color:#9ca3af">v1757452647</span>
   </div>
 
 <script>
@@ -242,19 +252,21 @@
     activateTabs(key);
   }
 
-  // Init: svc from URL
+  // Init from URL
   const params = new URLSearchParams(location.search);
   let svcKey = (params.get('svc')||'labor').toLowerCase();
-  if (!['labor','packing','assembly'].includes(svcKey)) svcKey = 'labor';
+  if (!['labor','packing','assembly'].includes(svcKey)) svcKey='labor';
   setServiceByKey(svcKey);
+  if (params.get('thanks')==='1') { const ok = $("ok"); ok.style.display = 'block'; ok.scrollIntoView({behavior:'smooth', block:'start'}); }
 
-  // Tabs update URL without reload
+  // Tabs behavior
   document.querySelectorAll('.tab').forEach(a => {
     a.addEventListener('click', function(e){
       e.preventDefault();
       const key = this.getAttribute('data-svc');
       const u = new URL(location.href);
       u.searchParams.set('svc', key);
+      u.searchParams.delete('thanks');
       history.pushState({svc:key}, '', u.toString());
       setServiceByKey(key);
     });
@@ -319,19 +331,14 @@
     if (k==='assembly') { range=calcAssembly(); details=svcMap.assembly; }
     $('estimate').innerHTML = "<strong>"+details+" — Instant Estimate:</strong>"+
       "<div style='font-size:1.2rem;margin:.3rem 0;'><b>"+fmt(range[0])+" – "+fmt(range[1])+"</b></div>"+
-      "<div class='help'>Final pricing may vary based on access, parking, and timing. Click 'Request Exact Quote' to email us the details.</div>";
+      "<div class='help'>Final pricing may vary based on access, parking, and timing. Submit for an exact written quote.</div>";
   }
 
-  function sendEmail(){
-    const form = document.getElementById('quoteForm');
-    if (!form.reportValidity()) return;
-
-    const k = (new URLSearchParams(location.search).get('svc')||'labor').toLowerCase();
-    const svcName = svcMap[k] || svcMap.labor;
-
+  function buildSummary() {
+    const svcKeyNow = (new URLSearchParams(location.search).get('svc')||'labor').toLowerCase();
+    const svcName = svcMap[svcKeyNow] || svcMap.labor;
     calculate();
-    const summaryText = document.getElementById('estimate').innerText.replace(/\s+/g,' ').trim();
-
+    const summary = document.getElementById('estimate').innerText.replace(/\s+/g,' ').trim();
     const fields = [
       ["Service", svcName],
       ["Name", document.getElementById('name').value],
@@ -339,32 +346,61 @@
       ["Phone", document.getElementById('phone').value],
       ["ZIP", document.getElementById('zip').value]
     ];
-
-    if (k==='labor') {
+    if (svcKeyNow==='labor') {
       fields.push(["Crew Size", document.getElementById('laborCrew').value+" movers"]);
       fields.push(["Estimated Hours", document.getElementById('laborHours').value]);
       fields.push(["Stairs", document.getElementById('laborStairs').value]);
       fields.push(["Heavy Item", document.getElementById('heavyItemLabor').value]);
     }
-    if (k==='packing') {
+    if (svcKeyNow==='packing') {
       fields.push(["Rooms", document.getElementById('packRooms').value]);
       fields.push(["Fragile", document.getElementById('packFragile').value]);
       fields.push(["Include Materials", document.getElementById('packMaterials').value]);
     }
-    if (k==='assembly') {
+    if (svcKeyNow==='assembly') {
       fields.push(["# Items", document.getElementById('asmItems').value]);
       fields.push(["Complexity", document.getElementById('asmComplexity').value]);
       fields.push(["200+ lbs Item", document.getElementById('asmHeavy').value]);
     }
+    return {svcKeyNow, svcName, summary, fields};
+  }
 
-    const lines = fields.map(([k,v]) => k + ": " + v);
-    lines.push("");
-    lines.push("Estimate: " + summaryText);
+  async function requestQuote(){
+    const form = document.getElementById('quoteForm');
+    if (!form.reportValidity()) return;
 
-    const subject = encodeURIComponent("FG Quote Request — " + svcName);
-    const body = encodeURIComponent(lines.join("\n"));
-    const mailto = "mailto:kelly@fertigandgordon.com?subject="+subject+"&body="+body;
-    window.location.href = mailto;
+    const {svcKeyNow, svcName, summary, fields} = buildSummary();
+
+    // Build JSON for FormSubmit's AJAX endpoint
+    const data = Object.fromEntries(fields.map(([k,v]) => [k.replace(/\s+/g,'_'), v]));
+    data["Estimate_Summary"] = summary;
+    data["_subject"] = "FG Quote Request — " + svcName;
+    data["_template"] = "table";
+
+    try {
+      const res = await fetch("https://formsubmit.co/ajax/kelly@fertigandgordon.com", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error("HTTP "+res.status);
+      // Success — show thanks
+      const u = new URL(location.href);
+      u.searchParams.set('thanks','1');
+      history.replaceState(null, '', u.toString());
+      document.getElementById('ok').style.display = 'block';
+      document.getElementById('err').style.display = 'none';
+      document.getElementById('ok').scrollIntoView({behavior:'smooth',block:'start'});
+    } catch (e) {
+      // Fallback to mailto
+      document.getElementById('err').style.display = 'block';
+      const lines = fields.map(([k,v]) => k + ": " + v);
+      lines.push("", "Estimate: " + summary);
+      const subject = encodeURIComponent("FG Quote Request — " + svcName);
+      const body = encodeURIComponent(lines.join("\n"));
+      const mailto = "mailto:kelly@fertigandgordon.com?subject="+subject+"&body="+body;
+      window.location.href = mailto;
+    }
   }
 
   Array.from(document.querySelectorAll('input,select')).forEach(el => el.addEventListener('change', calculate));
